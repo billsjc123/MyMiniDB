@@ -8,12 +8,27 @@ const (
 	entryHeaderLen = 10
 )
 
+const (
+	Mark_Put = iota
+	Mark_Del
+)
+
 type Entry struct {
 	Key       []byte
 	Value     []byte
 	KeySize   uint32
 	ValueSize uint32
 	Mark      uint16
+}
+
+func NewEntry(key, value []byte, mark uint16) *Entry {
+	return &Entry{
+		Key:       []byte(key),
+		Value:     []byte(value),
+		KeySize:   uint32(len(key)),
+		ValueSize: uint32(len(value)),
+		Mark:      mark,
+	}
 }
 
 func (e *Entry) GetSize() int64 {
@@ -34,7 +49,7 @@ func (e *Entry) Encode() ([]byte, error) {
 	return buf, nil
 }
 
-func Decode(buf []byte) *Entry {
+func DecodeHeader(buf []byte) *Entry {
 	keySize := binary.BigEndian.Uint32(buf[0:4])
 	valueSize := binary.BigEndian.Uint32(buf[4:8])
 	mark := binary.BigEndian.Uint16(buf[8:10])
