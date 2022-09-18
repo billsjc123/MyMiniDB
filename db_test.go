@@ -87,3 +87,44 @@ func TestDelete(t *testing.T) {
 		})
 	})
 }
+
+func TestMerge(t *testing.T) {
+	convey.Convey("test Merge", t, func() {
+		pwd, _ := os.Getwd()
+		miniDB := &MiniDB{
+			index:   make(map[string]int64),
+			dirpath: pwd + string(os.PathSeparator) + "temp",
+			mu:      &sync.RWMutex{},
+		}
+		miniDB.file, _ = NewDBFile(miniDB.dirpath)
+
+		miniDB.Put([]byte("k1"), []byte("v1"))
+		miniDB.Put([]byte("k1"), []byte("v11"))
+		miniDB.Put([]byte("k2"), []byte("v2"))
+		miniDB.Delete([]byte("k2"))
+		convey.So(miniDB.file.Offset, convey.ShouldEqual, 55)
+
+		miniDB.Merge()
+		convey.So(miniDB.file.Offset, convey.ShouldEqual, 15)
+	})
+}
+
+func TestOpen(t *testing.T) {
+	convey.Convey("test open", t, func() {
+		pwd, _ := os.Getwd()
+		dirpath := pwd + string(os.PathSeparator) + "temp"
+		miniDB := &MiniDB{
+			index:   make(map[string]int64),
+			dirpath: dirpath,
+			mu:      &sync.RWMutex{},
+		}
+		miniDB.file, _ = NewDBFile(miniDB.dirpath)
+		miniDB.Put([]byte("k"), []byte("v"))
+		convey.Convey("test open", func() {
+			db, err := Open(dirpath)
+
+			convey.So(err, convey.ShouldBeNil)
+			convey.So(db.index, convey.ShouldNotBeEmpty)
+		})
+	})
+}

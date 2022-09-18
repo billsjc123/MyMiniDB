@@ -13,8 +13,30 @@ type MiniDB struct {
 	mu      *sync.RWMutex
 }
 
-func (db *MiniDB) Open(dirpath string) {
+func Open(dirpath string) (*MiniDB, error) {
+	// 如果目录不存在则创建目录
+	if _, err := os.Stat(dirpath); os.IsNotExist(err) {
+		if err := os.MkdirAll(dirpath, os.ModePerm); err != nil {
+			return nil, err
+		}
+	}
 
+	dbFile, err := NewDBFile(dirpath)
+	if err != nil {
+		return nil, err
+	}
+
+	db := &MiniDB{
+		file:    dbFile,
+		dirpath: dirpath,
+		index:   make(map[string]int64),
+	}
+
+	err = db.loadIndexFromDBFile()
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
 }
 
 func (db *MiniDB) Put(key, value []byte) error {
@@ -112,18 +134,36 @@ func (db *MiniDB) Merge() error {
 		// 重写有效Entry
 		for _, e := range validEntry {
 			writeOffset := mergedFile.Offset
-			err = db.file.Write(e)
+			err = mergedFile.Write(e)
 			if err != nil {
 				fmt.Printf("write entry to merged file error. entry: %v, err: %v", e, err)
 				return err
 			}
 			db.index[string(e.Key)] = int64(writeOffset)
 		}
-	}
 
+		// 删除原文件
+		dbFileName := db.file.File.Name()
+		db.file.File.Close()
+		os.Remove(dbFileName)
+
+		mergeDBFileName := mergedFile.File.Name()
+		mergedFile.File.Close()
+		os.Rename(mergeDBFileName, db.dirpath+string(os.PathSeparator)+FileName)
+		db.file = mergedFile
+	}
 	return nil
 }
 
-func (db *MiniDB) loadIndexFromDBFile() {
-
+func (db *MiniDB) loadIndexFromDBFile() error {
+	var offset int64 = 0
+	for offset < db.file.Offset {
+		entry, err := db.file.Read(offset)
+		if err != nil {
+			return err
+		}
+		db.index[string(entry.Key)] = offset
+		offset += entry.GetSize()
+	}
+	return nil
 }
